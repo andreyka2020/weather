@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>Brussels · Live Weather Wallpaper</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --glass-bg:rgba(12,16,24,.34);
+  --glass-brd:rgba(255,255,255,.16);
+  --text:#f5f8fc;
+  --muted:rgba(245,248,252,.62);
+  --shadow:0 24px 70px rgba(0,0,0,.38);
+}
+html,body{height:100%}
+body{
+  overflow:hidden;
+  font-family:"Inter","Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  color:var(--text);
+  background:linear-gradient(165deg,#33465f 0%,#182233 55%,#0c111b 100%);
+  -webkit-font-smoothing:antialiased;
+  cursor:pointer;
+  user-select:none;
+}
+body.ui-hidden{cursor:none}
+
+/* ===== Фон: два слоя для плавного crossfade ===== */
+#bgStack{position:fixed;inset:0;z-index:0;overflow:hidden}
+.bg-layer{
+  position:absolute;inset:0;
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+  opacity:0;
+  transition:opacity 1.6s ease-in-out;
+  will-change:opacity,transform;
+  animation:kenburns 90s ease-in-out infinite alternate;
+}
+@keyframes kenburns{
+  from{transform:scale(1.03) translate3d(0,0,0)}
+  to{transform:scale(1.12) translate3d(-1.6%,-1.2%,0)}
+}
+.bg-layer.visible{opacity:1}
+
+/* ===== Затемнение по краям для читаемости ===== */
+#vignette{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:
+    radial-gradient(130% 100% at 18% 35%,transparent 35%,rgba(0,0,0,.5) 100%),
+    linear-gradient(to top,rgba(0,0,0,.42),transparent 34%);
+}
+
+/* ===== Туман ===== */
+#mist{position:fixed;inset:-12%;z-index:2;pointer-events:none;opacity:0;transition:opacity 2.4s ease;filter:blur(46px)}
+#mist.active{opacity:.6}
+#mist::before,#mist::after{content:"";position:absolute;inset:0;
+  background:
+    radial-gradient(46% 42% at 28% 62%,rgba(232,238,244,.55),transparent 72%),
+    radial-gradient(42% 38% at 72% 38%,rgba(214,224,234,.45),transparent 72%),
+    radial-gradient(60% 30% at 50% 85%,rgba(226,232,240,.4),transparent 75%);
+  animation:mistDrift 44s ease-in-out infinite alternate}
+#mist::after{animation-duration:68s;animation-direction:alternate-reverse;opacity:.8}
+@keyframes mistDrift{
+  from{transform:translate3d(-4%,1%,0) scale(1)}
+  to{transform:translate3d(5%,-2%,0) scale(1.08)}
+}
+
+/* ===== Канва осадков и вспышки молний ===== */
+#fx{position:fixed;inset:0;z-index:3;pointer-events:none}
+#lightning{position:fixed;inset:0;z-index:4;pointer-events:none;opacity:0;background:radial-gradient(60% 50% at 50% 0%,rgba(235,243,255,.95),rgba(190,210,255,.35) 55%,transparent 85%)}
+/* ===== Интерфейс ===== */
+#ui{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:clamp(16px,2.4vh,30px);padding:7vh 7vw;pointer-events:none;transition:opacity .55s ease,transform .55s ease}
+#ui.hidden{opacity:0;transform:translateY(18px) scale(.985);visibility:hidden;transition:opacity .5s ease,transform .5s ease,visibility 0s .5s}
+
+.glass{
+  pointer-events:auto;
+  background:var(--glass-bg);
+  -webkit-backdrop-filter:blur(24px) saturate(160%);
+  backdrop-filter:blur(24px) saturate(160%);
+  border:1px solid var(--glass-brd);
+  border-radius:clamp(22px,2vw,34px);
+  box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.14);
+  padding:clamp(20px,2.6vh,34px) clamp(26px,3vw,48px);
+  animation:rise 1s cubic-bezier(.2,.75,.25,1) both;
+}
+.clock{animation-delay:.15s}
+.weather{animation-delay:.45s;min-width:min(440px,86vw)}
+@keyframes rise{
+  from{opacity:0;transform:translateY(30px);filter:blur(8px)}
+  to{opacity:1;transform:translateY(0);filter:blur(0)}
+}
+
+/* Часы */
+#time{display:flex;align-items:baseline;font-weight:200;font-size:clamp(64px,11.5vw,180px);line-height:1;letter-spacing:-.035em;font-variant-numeric:tabular-nums;text-shadow:0 10px 46px rgba(0,0,0,.5)}
+#time .colon{animation:blink 1s step-end infinite;padding:0 .04em}
+#ss{font-size:.3em;font-weight:400;letter-spacing:.06em;opacity:.6;margin-left:.18em}
+@keyframes blink{50%{opacity:.12}}
+#date{margin-top:clamp(6px,1.2vh,14px);font-size:clamp(15px,1.7vw,24px);font-weight:500;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+
+/* Погода */
+.wx-place{font-size:clamp(12px,1.1vw,15px);letter-spacing:.24em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.wx-main{display:flex;align-items:center;gap:clamp(14px,1.6vw,24px)}
+#wxIcon{font-size:clamp(46px,5.4vw,78px);line-height:1;filter:drop-shadow(0 8px 22px rgba(0,0,0,.4));animation:floaty 5.5s ease-in-out infinite}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+#wxTemp{font-size:clamp(46px,5.6vw,84px);font-weight:200;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+#wxCond{margin-top:6px;font-size:clamp(14px,1.4vw,20px);color:var(--muted);letter-spacing:.06em}
+.stats{display:flex;gap:clamp(16px,2vw,34px);margin-top:clamp(16px,2.2vh,26px);padding-top:clamp(14px,2vh,22px);border-top:1px solid rgba(255,255,255,.12)}
+.stat{display:flex;flex-direction:column;gap:5px}
+.stat-label{font-size:clamp(10px,.9vw,13px);letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.stat-value{font-size:clamp(15px,1.5vw,21px);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat-value.offline{color:#ffb4a8}
+
+/* Подсказка */
+#hint{position:fixed;left:50%;bottom:3.4vh;transform:translateX(-50%);z-index:11;font-size:clamp(11px,1vw,14px);letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.75);background:rgba(10,14,20,.35);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.14);border-radius:100px;padding:10px 22px;pointer-events:none;animation:hintFade 9s ease forwards}
+#hint b{color:#ffd9a0}
+body.ui-hidden #hint{opacity:0!important;transition:opacity .4s}
+@keyframes hintFade{0%{opacity:0}8%{opacity:1}72%{opacity:1}100%{opacity:0}}
+
+@media (max-width:760px){
+  #ui{padding:6vh 6vw;justify-content:flex-start;padding-top:9vh}
+  .weather{min-width:0;width:100%}
+  .stats{flex-wrap:wrap;gap:14px 22px}
+}
+@media (prefers-reduced-motion:reduce){
+  .bg-layer{animation:none}
+  #wxIcon{animation:none}
+}
+</style>
+</head>
+<body>
+<div id="bgStack"></div>
+<div id="mist"></div>
+<div id="vignette"></div>
+<canvas id="fx"></canvas>
+<div id="lightning"></div>
+
+<div id="ui">
+  <section class="glass clock" aria-label="Часы">
+    <div id="time">
+      <span id="hh">--</span><span class="colon">:</span><span id="mm">--</span><span id="ss">--</span>
+    </div>
+    <div id="date">загрузка…</div>
+  </section>
+
+  <section class="glass weather" aria-label="Погода">
+    <div class="wx-place">📍 <span id="wxPlace">Брюссель</span></div>
+    <div class="wx-main">
+      <span id="wxIcon">🌤️</span>
+      <div>
+        <div id="wxTemp">—°</div>
+        <div id="wxCond">Загрузка погоды…</div>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-label">Ветер</span>
+        <span class="stat-value" id="wxWind">— км/ч</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Влажность</span>
+        <span class="stat-value" id="wxHum">—%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Обновлено</span>
+        <span class="stat-value" id="wxUpd">—:—</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="hint">Клик или клавиша <b>H</b> — скрыть интерфейс</div>
+<script>
+'use strict';
+
+/* ============================================================
+   НАСТРОЙКИ — меняйте здесь
+   ============================================================ */
+const CONFIG = {
+  latitude: 50.8503,            // Широта (Брюссель)
+  longitude: 4.3517,            // Долгота (Брюссель)
+  locationName: 'Брюссель',     // Название места в карточке
+  timezone: 'Europe/Brussels',  // Часовой пояс для Open-Meteo
+  refreshMinutes: 12,           // Обновление погоды (10–15 минут)
+};
+
+/* ============================================================
+   МАТРИЦА СПРАЙТОВ 4 × 4 (время суток × погода)
+   Фактически файлы лежат в подпапках: morning/, day/, sunset/, night/.
+   Кандидаты: подпапка → плоский путь → *_clear → градиент.
+   ============================================================ */
+const SPRITE_MATRIX = {
+  morning: { // Утро
+    clear: 'morning_clear.png',
+    rain:  'morning_rain.png',
+    storm: 'morning_storm.png',
+    fog:   'morning_fog.png',
+  },
+  day: { // День
+    clear: 'day_clear.png',
+    rain:  'day_rain.png',
+    storm: 'day_storm.png',
+    fog:   'day_fog.png',
+  },
+  sunset: { // Закат
+    clear: 'sunset_clear.png',
+    rain:  'sunset_rain.png',
+    storm: 'sunset_storm.png',
+    fog:   'sunset_fog.png',
+  },
+  night: { // Ночь
+    clear: 'night_clear.png',
+    rain:  'night_rain.png',
+    storm: 'night_storm.png',
+    fog:   'night_fog.png',
+  },
+};
+
+/* Градиенты на случай, если ни один спрайт не найден */
+const GRADIENT_FALLBACK = {
+  morning: 'linear-gradient(180deg,#ffd9a0 0%,#9fd3e8 45%,#4c6f93 100%)',
+  day:     'linear-gradient(180deg,#8ec9f0 0%,#5a8fbf 60%,#33506e 100%)',
+  sunset:  'linear-gradient(180deg,#ffb26b 0%,#e2607a 45%,#3d2c50 100%)',
+  night:   'linear-gradient(180deg,#0b1026 0%,#1a2340 55%,#0a0e1a 100%)',
+};
+
+/* Описания погодных состояний */
+const WEATHER_UI = {
+  clear: { label: 'Ясно',          iconDay: '🌤️', iconNight: '🌙' },
+  rain:  { label: 'Дождь',         iconDay: '🌧️', iconNight: '🌧️' },
+  storm: { label: 'Гроза, ливень', iconDay: '⛈️',  iconNight: '⛈️'  },
+  fog:   { label: 'Туман',         iconDay: '🌫️', iconNight: '🌫️' },
+};
+
+/* ============================================================
+   Состояние приложения
+   ============================================================ */
+const state = {
+  period: 'day',          // morning | day | sunset | night
+  condition: 'clear',     // clear | rain | storm | fog
+  temp: null,
+  humidity: null,
+  wind: null,
+  online: false,
+  lastUpdate: null,
+};
+
+const missingSprites = new Set(); // кэш несуществующих файлов
+let activeLayer = null;           // текущий видимый слой фона
+let activeKey = '';               // ключ "период_погода" активного спрайта
+let activeIsGradient = false;
+
+/* Время суток: утро 5–10, день 11–17, закат 18–20, ночь 21–4 */
+function getPeriod(date) {
+  const h = date.getHours();
+  if (h >= 5 && h < 11) return 'morning';
+  if (h >= 11 && h < 18) return 'day';
+  if (h >= 18 && h < 21) return 'sunset';
+  return 'night';
+}
+
+/* Код погоды WMO → наше состояние (clear | rain | storm | fog) */
+function codeToCondition(code) {
+  if (code === 45 || code === 48) return 'fog';                  // туман
+  if (code === 95 || code === 96 || code === 99) return 'storm'; // гроза
+  if (code === 65 || code === 82) return 'storm';                // сильный ливень
+  if (code >= 51 && code <= 67) return 'rain';                   // морось / дождь
+  if (code >= 80 && code <= 81) return 'rain';                   // ливень
+  if (code >= 71 && code <= 77) return 'rain';                   // снег → осадки
+  if (code === 85 || code === 86) return 'rain';                 // снегопад
+  return 'clear';                                                // 0–3: ясно / облачно
+}
+/* ============================================================
+   Загрузка спрайта с каскадным фоллбэком:
+   1) <период>/<файл>  2) <файл> (плоско)
+   3) <период>/<период>_clear.png  4) <период>_clear.png  5) градиент
+   ============================================================ */
+function spriteCandidates(period, condition) {
+  const file = SPRITE_MATRIX[period][condition];
+  const list = [period + '/' + file, file];
+  if (condition !== 'clear') {
+    const clearFile = SPRITE_MATRIX[period].clear;
+    list.push(period + '/' + clearFile, clearFile);
+  }
+  return list.filter((p, i) => list.indexOf(p) === i);
+}
+
+function loadSprite(url) {
+  return new Promise((resolve, reject) => {
+    if (missingSprites.has(url)) return reject(new Error('missing'));
+    const img = new Image();
+    img.onload = () => resolve(url);
+    img.onerror = () => { missingSprites.add(url); reject(new Error('missing')); };
+    img.src = url;
+  });
+}
+
+async function firstAvailable(urls) {
+  for (const url of urls) {
+    try { return await loadSprite(url); } catch (e) { /* пробуем следующий */ }
+  }
+  return null;
+}
+
+/* Плавная смена слоя фона (crossfade + fade 1.6 c) */
+function swapLayer(paint) {
+  const next = document.createElement('div');
+  next.className = 'bg-layer';
+  paint(next);
+  document.getElementById('bgStack').appendChild(next);
+  const prev = activeLayer;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    next.classList.add('visible');
+    if (prev) {
+      prev.classList.remove('visible');
+      setTimeout(() => prev.remove(), 1800);
+    }
+    activeLayer = next;
+  }));
+}
+
+function applyBackground() {
+  const { period, condition } = state;
+  const key = period + '_' + condition;
+  if (key === activeKey) return;
+  activeKey = key;
+
+  firstAvailable(spriteCandidates(period, condition)).then((url) => {
+    if (key !== activeKey) return; // состояние уже изменилось — устаревший результат игнорируем
+    if (url) {
+      activeIsGradient = false;
+      swapLayer((el) => { el.style.backgroundImage = 'url("' + url + '")'; });
+    } else if (activeIsGradient && activeLayer) {
+      // Все кандидаты отсутствуют — градиент по времени суток
+      activeLayer.style.backgroundImage = GRADIENT_FALLBACK[period];
+    } else {
+      activeIsGradient = true;
+      swapLayer((el) => { el.style.backgroundImage = GRADIENT_FALLBACK[period]; });
+    }
+  });
+}
+
+/* Предзагрузка всех 16 путей для мгновенных переключений */
+function preloadSprites() {
+  Object.keys(SPRITE_MATRIX).forEach((period) => {
+    Object.keys(SPRITE_MATRIX[period]).forEach((cond) => {
+      spriteCandidates(period, cond).forEach((path) => loadSprite(path).catch(() => {}));
+    });
+  });
+}
+
+/* ============================================================
+   Погода: Open-Meteo (обновление каждые CONFIG.refreshMinutes)
+   ============================================================ */
+function weatherUrl() {
+  const p = new URLSearchParams({
+    latitude: CONFIG.latitude,
+    longitude: CONFIG.longitude,
+    current: 'temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m',
+    timezone: CONFIG.timezone,
+    wind_speed_unit: 'kmh',
+  });
+  return 'https://api.open-meteo.com/v1/forecast?' + p.toString();
+}
+
+async function fetchWeather() {
+  try {
+    const res = await fetch(weatherUrl());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const cur = data.current;
+    state.temp = cur.temperature_2m;
+    state.humidity = cur.relative_humidity_2m;
+    state.wind = cur.wind_speed_10m;
+    state.condition = codeToCondition(cur.weather_code);
+    state.online = true;
+    state.lastUpdate = new Date();
+  } catch (err) {
+    state.online = false;
+    console.warn('Не удалось обновить погоду:', err.message);
+  }
+  renderWeather();
+  applyBackground();
+  updateFxMode();
+}
+/* ============================================================
+   Рендеринг карточки погоды
+   ============================================================ */
+function renderWeather() {
+  const ui = WEATHER_UI[state.condition] || WEATHER_UI.clear;
+  const isNight = state.period === 'night';
+  document.getElementById('wxPlace').textContent = CONFIG.locationName;
+  document.getElementById('wxIcon').textContent = isNight ? ui.iconNight : ui.iconDay;
+  document.getElementById('wxCond').textContent = ui.label;
+  document.getElementById('wxTemp').textContent =
+    state.temp === null ? '—°' : Math.round(state.temp) + '°';
+
+  const hum = document.getElementById('wxHum');
+  hum.textContent = state.humidity === null ? '—%' : Math.round(state.humidity) + '%';
+
+  const wind = document.getElementById('wxWind');
+  wind.textContent = state.wind === null ? '— км/ч' : Math.round(state.wind) + ' км/ч';
+
+  const upd = document.getElementById('wxUpd');
+  if (state.online && state.lastUpdate) {
+    upd.classList.remove('offline');
+    upd.textContent = state.lastUpdate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  } else {
+    upd.classList.add('offline');
+    upd.textContent = 'нет связи';
+  }
+}
+
+/* ============================================================
+   Часы и дата (каждую секунду) + смена времени суток
+   ============================================================ */
+const dateFmt = new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+
+function tick() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  document.getElementById('hh').textContent = hh;
+  document.getElementById('mm').textContent = mm;
+  document.getElementById('ss').textContent = ss;
+
+  const dateEl = document.getElementById('date');
+  const text = dateFmt.format(now);
+  dateEl.textContent = text.charAt(0).toUpperCase() + text.slice(1);
+
+  const newPeriod = getPeriod(now);
+  if (newPeriod !== state.period) {
+    state.period = newPeriod;
+    applyBackground();
+    renderWeather(); // иконка день/ночь
+  }
+}
+
+/* ============================================================
+   Эффекты: дождь на canvas, молнии при грозе, туман
+   ============================================================ */
+const canvas = document.getElementById('fx');
+const ctx = canvas.getContext('2d');
+const lightningEl = document.getElementById('lightning');
+const mistEl = document.getElementById('mist');
+
+let fxMode = 'none'; // none | rain | storm
+let drops = [];
+let viewW = 0;
+let viewH = 0;
+let lightningTimer = null;
+
+function resizeCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  viewW = window.innerWidth;
+  viewH = window.innerHeight;
+  canvas.width = Math.floor(viewW * dpr);
+  canvas.height = Math.floor(viewH * dpr);
+  canvas.style.width = viewW + 'px';
+  canvas.style.height = viewH + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (fxMode !== 'none') spawnDrops();
+}
+
+function spawnDrops() {
+  const count = fxMode === 'storm' ? Math.round(viewW / 3) : Math.round(viewW / 8);
+  drops = [];
+  for (let i = 0; i < count; i++) {
+    drops.push({
+      x: Math.random() * viewW,
+      y: Math.random() * viewH,
+      len: 10 + Math.random() * (fxMode === 'storm' ? 26 : 16),
+      speed: 9 + Math.random() * (fxMode === 'storm' ? 14 : 8),
+      alpha: 0.15 + Math.random() * (fxMode === 'storm' ? 0.4 : 0.28),
+    });
+  }
+}
+
+function windDrift() {
+  // Снос капель ветром: из Open-Meteo приходит км/ч
+  const w = state.wind === null ? 8 : state.wind;
+  return Math.max(-6, Math.min(6, w / 9));
+}
+
+function animateFx() {
+  ctx.clearRect(0, 0, viewW, viewH);
+  if (drops.length && fxMode !== 'none') {
+    const drift = windDrift();
+    ctx.lineCap = 'round';
+    for (let i = 0; i < drops.length; i++) {
+      const d = drops[i];
+      d.y += d.speed;
+      d.x += drift;
+      if (d.y > viewH + 40 || d.x < -60 || d.x > viewW + 60) {
+        d.y = -40 - Math.random() * 120;
+        d.x = Math.random() * viewW;
+      }
+      ctx.strokeStyle = 'rgba(198,220,255,' + d.alpha + ')';
+      ctx.lineWidth = fxMode === 'storm' ? 1.6 : 1.1;
+      ctx.beginPath();
+      ctx.moveTo(d.x, d.y);
+      ctx.lineTo(d.x - drift * (d.len / 3), d.y - d.len);
+      ctx.stroke();
+    }
+  }
+  requestAnimationFrame(animateFx);
+}
+
+function flashLightning() {
+  lightningEl.animate(
+    [
+      { opacity: 0 },
+      { opacity: 0.75, offset: 0.06 },
+      { opacity: 0.08, offset: 0.18 },
+      { opacity: 0.55, offset: 0.3 },
+      { opacity: 0 },
+    ],
+    { duration: 900, easing: 'ease-out' }
+  );
+  scheduleLightning();
+}
+
+function scheduleLightning() {
+  clearTimeout(lightningTimer);
+  if (fxMode !== 'storm') return;
+  lightningTimer = setTimeout(flashLightning, 4000 + Math.random() * 9000);
+}
+
+function updateFxMode() {
+  const mode = state.condition === 'storm' ? 'storm'
+    : state.condition === 'rain' ? 'rain' : 'none';
+  if (mode !== fxMode) {
+    fxMode = mode;
+    spawnDrops();
+    scheduleLightning();
+  }
+  mistEl.classList.toggle('active', state.condition === 'fog');
+}
+/* ============================================================
+   Скрытие / показ интерфейса: клик или клавиша H
+   ============================================================ */
+const uiEl = document.getElementById('ui');
+
+function toggleUi() {
+  const hidden = uiEl.classList.toggle('hidden');
+  document.body.classList.toggle('ui-hidden', hidden);
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target instanceof Element && e.target.closest('a')) return;
+  toggleUi();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  // H — английская раскладка, р — русская раскладка (та же клавиша)
+  const k = e.key.toLowerCase();
+  if (k === 'h' || k === 'р') {
+    e.preventDefault();
+    toggleUi();
+  }
+});
+
+/* ============================================================
+   Инициализация
+   ============================================================ */
+function init() {
+  document.getElementById('wxPlace').textContent = CONFIG.locationName;
+
+  // Стартовый градиент, чтобы экран не был чёрным до загрузки спрайта
+  state.period = getPeriod(new Date());
+  activeIsGradient = true;
+  activeKey = ''; // первый applyBackground обязательно подгрузит спрайт
+  swapLayer((el) => { el.style.backgroundImage = GRADIENT_FALLBACK[state.period]; });
+
+  preloadSprites();
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  tick();
+  setInterval(tick, 1000);
+
+  renderWeather();
+  fetchWeather();
+
+  // Автообновление погоды каждые 10–15 минут
+  setInterval(fetchWeather, CONFIG.refreshMinutes * 60 * 1000);
+
+  // Если вкладку вернули в фокус — обновить, если данные старше 10 минут
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    const stale = !state.lastUpdate || (Date.now() - state.lastUpdate.getTime()) > 10 * 60 * 1000;
+    if (stale) fetchWeather();
+    else applyBackground(); // подхватить смену времени суток
+  });
+
+  updateFxMode();
+  requestAnimationFrame(animateFx);
+}
+
+init();
+</script>
+</body>
+</html>
